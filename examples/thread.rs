@@ -30,11 +30,13 @@ fn main() -> Result<()> {
                 msg.value()
             )
         }
+        42
     });
 
-    consumer.join().map_err(|e| anyhow!("{:?}", e))?;
+    let secret = consumer.join().map_err(|e| anyhow!("{:?}", e))?;
 
-    println!("Congratulations, we finish all job!");
+    println!("Congratulations, we finish all job! {}", secret);
+
     Ok(())
 }
 
