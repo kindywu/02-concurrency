@@ -1,5 +1,9 @@
 use anyhow::{anyhow, Result};
-use std::ops::{Add, AddAssign, Deref, Mul};
+use std::{
+    ops::{Add, AddAssign, Deref, Mul},
+    thread,
+    time::Duration,
+};
 
 pub struct Vector<T> {
     data: Vec<T>,
@@ -48,6 +52,9 @@ where
     for i in 0..a.len() {
         sum += a[i] * b[i];
     }
+
+    let delay = (rand::random::<u8>() as u64) * 10;
+    thread::sleep(Duration::from_millis(delay));
 
     Ok(sum)
 }

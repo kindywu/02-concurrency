@@ -187,22 +187,40 @@ where
         return Err(anyhow!("Matrix multiply error: a.col != b.row"));
     }
 
-    let mut senders = Vec::new();
-    for i in 0..NUM_THREAD {
-        let (tx, rx) = mpsc::channel::<Msg<T>>();
-        thread::spawn(move || {
-            for msg in rx {
-                println!("thread {} working", i);
-                let value = dot_product_vec(msg.input.row, msg.input.col)?;
-                msg.sender
-                    .send(MsgOutput::new(msg.input.idx, value))
-                    .map_err(|e| anyhow::anyhow!("{:?}", e))?;
-            }
-            println!("thread {} exited", i);
-            Ok::<_, anyhow::Error>(())
-        });
-        senders.push(tx);
-    }
+    // let mut senders = Vec::new();
+    // for i in 0..NUM_THREAD {
+    //     let (tx, rx) = mpsc::channel::<Msg<T>>();
+    //     thread::spawn(move || {
+    //         for msg in rx {
+    //             println!("thread {} working", i);
+    //             let value = dot_product_vec(msg.input.row, msg.input.col)?;
+    //             msg.sender
+    //                 .send(MsgOutput::new(msg.input.idx, value))
+    //                 .map_err(|e| anyhow::anyhow!("{:?}", e))?;
+    //         }
+    //         println!("thread {} exited", i);
+    //         Ok::<_, anyhow::Error>(())
+    //     });
+    //     senders.push(tx);
+    // }
+
+    let senders = (0..NUM_THREAD)
+        .map(|i| {
+            let (tx, rx) = mpsc::channel::<Msg<T>>();
+            thread::spawn(move || {
+                for msg in rx {
+                    println!("thread {} working", i);
+                    let value = dot_product_vec(msg.input.row, msg.input.col)?;
+                    msg.sender
+                        .send(MsgOutput::new(msg.input.idx, value))
+                        .map_err(|e| anyhow::anyhow!("{:?}", e))?;
+                }
+                println!("thread {} exited", i);
+                Ok::<_, anyhow::Error>(())
+            });
+            tx
+        })
+        .collect::<Vec<_>>();
 
     let matrix_len = a.row * b.col;
 
