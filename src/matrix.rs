@@ -18,7 +18,7 @@ impl<T: fmt::Debug> Matrix<T> {
     }
 }
 
-pub fn multiply<T>(a: Matrix<T>, b: Matrix<T>) -> Result<Matrix<T>>
+pub fn multiply<T>(a: &Matrix<T>, b: &Matrix<T>) -> Result<Matrix<T>>
 where
     T: fmt::Debug + fmt::Display + Copy + Default + Add<Output = T> + AddAssign + Mul<Output = T>,
 {
@@ -45,9 +45,27 @@ where
 
     for i in 0..a.row {
         for j in 0..b.col {
-            for k in 0..a.col {
-                data[i * b.col + j] += a.data[i * a.col + k] * b.data[k * b.col + j];
-            }
+            let row = crate::Vector::new(&a.data[i * a.col..(i + 1) * a.col]);
+            let col = crate::Vector::new(
+                b.data[j..]
+                    .iter()
+                    .step_by(b.col)
+                    .copied()
+                    .collect::<Vec<_>>(),
+            );
+            data[i * b.col + j] = crate::dot_product(row, col)?;
+
+            // let row = &a.data[i * a.col..(i + 1) * a.col];
+            // let col = b.data[j..]
+            //     .iter()
+            //     .step_by(b.col)
+            //     .copied()
+            //     .collect::<Vec<_>>();
+            // data[i * b.col + j] = crate::dot_product_vec(row.into(), col)?;
+
+            // for k in 0..a.col {
+            //     data[i * b.col + j] += a.data[i * a.col + k] * b.data[k * b.col + j];
+            // }
         }
     }
 
@@ -94,7 +112,7 @@ where
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        multiply(self, rhs).expect("Matrix Mul Error")
+        multiply(&self, &rhs).expect("Matrix Mul Error")
     }
 }
 
@@ -125,7 +143,7 @@ mod tests {
     fn test_a_multiply_b() -> anyhow::Result<()> {
         let a = Matrix::new(2, 3, [1, 2, 3, 4, 5, 6]);
         let b = Matrix::new(3, 2, [1, 2, 3, 4, 5, 6]);
-        let c = multiply(a, b)?;
+        let c = multiply(&a, &b)?;
         // println!("{}", c);
         assert_eq!(c.data, [22, 28, 49, 64]);
         Ok(())
@@ -144,8 +162,9 @@ mod tests {
     fn test_a_can_not_multiply_b() {
         let a = Matrix::new(2, 3, [1, 2, 3, 4, 5, 6]);
         let b = Matrix::new(2, 2, [1, 2, 3, 4]);
-        let err = multiply(a, b).unwrap_err();
-        // println!("{}", err);
+        let result = multiply(&a, &b);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
         assert_eq!(err.to_string(), "Matrix multiply error: a.col != b.row");
     }
 }
