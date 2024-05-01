@@ -6,19 +6,118 @@ use std::thread;
 
 use crate::dot_product_vec;
 
-pub struct Matrix<T> {
+pub struct Matrix<T>
+where
+    T: fmt::Debug
+        + fmt::Display
+        + Copy
+        + Default
+        + Add<Output = T>
+        + AddAssign
+        + Mul<Output = T>
+        + Send
+        + 'static,
+{
     data: Vec<T>,
     row: usize,
     col: usize,
 }
 
-impl<T: fmt::Debug> Matrix<T> {
-    pub fn new(row: usize, col: usize, data: impl Into<Vec<T>>) -> Self {
-        Self {
-            row,
-            col,
-            data: data.into(),
+impl<T> Matrix<T>
+where
+    T: fmt::Debug
+        + fmt::Display
+        + Copy
+        + Default
+        + Add<Output = T>
+        + AddAssign
+        + Mul<Output = T>
+        + Send
+        + 'static,
+{
+    pub fn new(row: usize, col: usize, data: impl Into<Vec<T>>) -> Result<Self> {
+        let data = data.into();
+        if data.len() != row * col {
+            return Err(anyhow!(
+                "Data length does not match the specified dimensions"
+            ));
         }
+        Ok(Self { row, col, data })
+    }
+}
+
+// impl<T> Matrix<T> {
+//     pub fn multiply<T>(self, b: &Matrix<T>) -> Result<Matrix<T>> {
+//         // multiply::<T>(&self, b)
+//         todo!()
+//     }
+// }
+
+impl<T> fmt::Display for Matrix<T>
+where
+    T: fmt::Debug
+        + fmt::Display
+        + Copy
+        + Default
+        + Add<Output = T>
+        + AddAssign
+        + Mul<Output = T>
+        + Send
+        + 'static,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{")?;
+        for i in 0..self.row {
+            for j in 0..self.col {
+                write!(f, "{}", self.data[i * self.col + j])?;
+                if j != self.col - 1 {
+                    write!(f, " ")?;
+                }
+            }
+            if i != self.row - 1 {
+                write!(f, ", ")?;
+            }
+        }
+
+        write!(f, "}}")?;
+        Ok(())
+    }
+}
+
+impl<T> fmt::Debug for Matrix<T>
+where
+    T: fmt::Debug
+        + fmt::Display
+        + Copy
+        + Default
+        + Add<Output = T>
+        + AddAssign
+        + Mul<Output = T>
+        + Send
+        + 'static,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Matrix(row={},col={},data={})", self.row, self.col, self)?;
+        Ok(())
+    }
+}
+
+impl<T> Mul for Matrix<T>
+where
+    T: fmt::Debug
+        + fmt::Display
+        + Copy
+        + Default
+        + Add<Output = T>
+        + AddAssign
+        + Mul<Output = T>
+        + Send
+        + 'static,
+{
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        multiply(&self, &rhs).expect("Matrix Mul Error")
     }
 }
 
@@ -161,59 +260,7 @@ where
         data[output.idx] = output.value;
     }
 
-    Ok(Matrix::new(a.row, b.col, data))
-}
-
-impl<T> fmt::Display for Matrix<T>
-where
-    T: fmt::Display,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{{")?;
-        for i in 0..self.row {
-            for j in 0..self.col {
-                write!(f, "{}", self.data[i * self.col + j])?;
-                if j != self.col - 1 {
-                    write!(f, " ")?;
-                }
-            }
-            if i != self.row - 1 {
-                write!(f, ", ")?;
-            }
-        }
-
-        write!(f, "}}")?;
-        Ok(())
-    }
-}
-
-impl<T> fmt::Debug for Matrix<T>
-where
-    T: fmt::Display,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Matrix(row={},col={},data={})", self.row, self.col, self)?;
-        Ok(())
-    }
-}
-
-impl<T> Mul for Matrix<T>
-where
-    T: fmt::Debug
-        + fmt::Display
-        + Copy
-        + Default
-        + Add<Output = T>
-        + AddAssign
-        + Mul<Output = T>
-        + Send
-        + 'static,
-{
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        multiply(&self, &rhs).expect("Matrix Mul Error")
-    }
+    Matrix::new(a.row, b.col, data)
 }
 
 #[cfg(test)]
@@ -224,13 +271,13 @@ mod tests {
     fn test_matrix_display() -> anyhow::Result<()> {
         let m = Matrix::new(2, 3, [1, 2, 3, 4, 5, 6]);
         // println!("{}", m);
-        assert_eq!(format!("{}", m), "{1 2 3, 4 5 6}");
+        assert_eq!(format!("{}", m?), "{1 2 3, 4 5 6}");
         Ok(())
     }
 
     #[test]
     fn test_matrix_debug() -> anyhow::Result<()> {
-        let m = Matrix::new(2, 3, [1, 2, 3, 4, 5, 6]);
+        let m = Matrix::new(2, 3, [1, 2, 3, 4, 5, 6])?;
         // println!("{:?}", m);
         assert_eq!(
             format!("{:?}", m),
@@ -241,8 +288,8 @@ mod tests {
 
     #[test]
     fn test_a_multiply_b() -> anyhow::Result<()> {
-        let a = Matrix::new(2, 3, [1, 2, 3, 4, 5, 6]);
-        let b = Matrix::new(3, 2, [1, 2, 3, 4, 5, 6]);
+        let a = Matrix::new(2, 3, [1, 2, 3, 4, 5, 6])?;
+        let b = Matrix::new(3, 2, [1, 2, 3, 4, 5, 6])?;
         let c = multiply(&a, &b)?;
         // println!("{}", c);
         assert_eq!(c.data, [22, 28, 49, 64]);
@@ -250,21 +297,30 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn test_a_multiply_b_use_mul() {
-        let a = Matrix::new(2, 3, [1, 2, 3, 4]);
-        let b = Matrix::new(2, 2, [1, 2, 3, 4]);
+    fn test_a_multiply_b_use_mul() -> anyhow::Result<()> {
+        let a = Matrix::new(2, 2, [1, 2, 3, 4])?;
+        let b = Matrix::new(2, 2, [1, 2, 3, 4])?;
         let c = a * b;
         assert_eq!(c.data, vec![7, 10, 15, 22]);
+        Ok(())
     }
 
     #[test]
-    fn test_a_can_not_multiply_b() {
-        let a = Matrix::new(2, 3, [1, 2, 3, 4, 5, 6]);
-        let b = Matrix::new(2, 2, [1, 2, 3, 4]);
+    fn test_a_can_not_multiply_b() -> anyhow::Result<()> {
+        let a = Matrix::new(2, 3, [1, 2, 3, 4, 5, 6])?;
+        let b = Matrix::new(2, 2, [1, 2, 3, 4])?;
         let result = multiply(&a, &b);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.to_string(), "Matrix multiply error: a.col != b.row");
+        Ok(())
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_a_can_not_mul_b() {
+        let a = Matrix::new(2, 3, [1, 2, 3, 4, 5, 6]).expect("a is invalid");
+        let b = Matrix::new(2, 2, [1, 2, 3, 4]).expect("b is invalid");
+        let _ = a * b;
     }
 }
