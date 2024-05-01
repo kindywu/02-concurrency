@@ -1,6 +1,10 @@
 use anyhow::{anyhow, Result};
 use core::fmt;
 use std::ops::{Add, AddAssign, Mul};
+use std::sync::mpsc;
+use std::thread;
+
+use crate::dot_product_vec;
 
 pub struct Matrix<T> {
     data: Vec<T>,
@@ -18,9 +22,53 @@ impl<T: fmt::Debug> Matrix<T> {
     }
 }
 
+const NUM_THREAD: u8 = 4;
+
+struct MsgInput<T> {
+    idx: usize,
+    row: Vec<T>,
+    col: Vec<T>,
+}
+
+impl<T> MsgInput<T> {
+    fn new(idx: usize, row: Vec<T>, col: Vec<T>) -> Self {
+        Self { idx, row, col }
+    }
+}
+
+struct MsgOutput<T> {
+    idx: usize,
+    value: T,
+}
+
+impl<T> MsgOutput<T> {
+    fn new(idx: usize, value: T) -> Self {
+        Self { idx, value }
+    }
+}
+
+struct Msg<T> {
+    input: MsgInput<T>,
+    sender: oneshot::Sender<MsgOutput<T>>,
+}
+
+impl<T> Msg<T> {
+    fn new(input: MsgInput<T>, sender: oneshot::Sender<MsgOutput<T>>) -> Self {
+        Self { input, sender }
+    }
+}
+
 pub fn multiply<T>(a: &Matrix<T>, b: &Matrix<T>) -> Result<Matrix<T>>
 where
-    T: fmt::Debug + fmt::Display + Copy + Default + Add<Output = T> + AddAssign + Mul<Output = T>,
+    T: fmt::Debug
+        + fmt::Display
+        + Copy
+        + Default
+        + Add<Output = T>
+        + AddAssign
+        + Mul<Output = T>
+        + Send
+        + 'static,
 {
     if a.row == 0 || a.col == 0 {
         return Err(anyhow!(
@@ -40,20 +88,43 @@ where
         return Err(anyhow!("Matrix multiply error: a.col != b.row"));
     }
 
+    let mut senders = Vec::new();
+    for i in 0..NUM_THREAD {
+        let (tx, rx) = mpsc::channel::<Msg<T>>();
+        thread::spawn(move || {
+            for msg in rx {
+                println!("thread {} working", i);
+                let value = dot_product_vec(msg.input.row, msg.input.col)?;
+                msg.sender
+                    .send(MsgOutput::new(msg.input.idx, value))
+                    .map_err(|e| anyhow::anyhow!("{:?}", e))?;
+            }
+            println!("thread {} exited", i);
+            Ok::<_, anyhow::Error>(())
+        });
+        senders.push(tx);
+    }
+
     let matrix_len = a.row * b.col;
+
     let mut data = vec![T::default(); matrix_len];
+    let mut receivers = Vec::with_capacity(matrix_len);
 
     for i in 0..a.row {
         for j in 0..b.col {
-            let row = crate::Vector::new(&a.data[i * a.col..(i + 1) * a.col]);
-            let col = crate::Vector::new(
-                b.data[j..]
-                    .iter()
-                    .step_by(b.col)
-                    .copied()
-                    .collect::<Vec<_>>(),
-            );
-            data[i * b.col + j] = crate::dot_product(row, col)?;
+            // for k in 0..a.col {
+            //     data[i * b.col + j] += a.data[i * a.col + k] * b.data[k * b.col + j];
+            // }
+
+            // let row = crate::Vector::new(&a.data[i * a.col..(i + 1) * a.col]);
+            // let col = crate::Vector::new(
+            //     b.data[j..]
+            //         .iter()
+            //         .step_by(b.col)
+            //         .copied()
+            //         .collect::<Vec<_>>(),
+            // );
+            // data[i * b.col + j] = crate::dot_product(row, col)?;
 
             // let row = &a.data[i * a.col..(i + 1) * a.col];
             // let col = b.data[j..]
@@ -63,10 +134,31 @@ where
             //     .collect::<Vec<_>>();
             // data[i * b.col + j] = crate::dot_product_vec(row.into(), col)?;
 
-            // for k in 0..a.col {
-            //     data[i * b.col + j] += a.data[i * a.col + k] * b.data[k * b.col + j];
-            // }
+            let row = &a.data[i * a.col..(i + 1) * a.col];
+            let col = b.data[j..]
+                .iter()
+                .step_by(b.col)
+                .copied()
+                .collect::<Vec<_>>();
+            let idx = i * b.col + j;
+
+            let (tx, rx) = oneshot::channel();
+            let msg = Msg::new(MsgInput::new(idx, row.into(), col), tx);
+            senders[idx % NUM_THREAD as usize]
+                .send(msg)
+                .map_err(|e| anyhow!("{:?}", e))?;
+            receivers.push(rx);
         }
+    }
+
+    // drop the tx for thread to exit
+    for tx in senders {
+        drop(tx);
+    }
+
+    for rx in receivers {
+        let output = rx.recv()?;
+        data[output.idx] = output.value;
     }
 
     Ok(Matrix::new(a.row, b.col, data))
@@ -107,7 +199,15 @@ where
 
 impl<T> Mul for Matrix<T>
 where
-    T: fmt::Debug + fmt::Display + Copy + Default + Add<Output = T> + AddAssign + Mul<Output = T>,
+    T: fmt::Debug
+        + fmt::Display
+        + Copy
+        + Default
+        + Add<Output = T>
+        + AddAssign
+        + Mul<Output = T>
+        + Send
+        + 'static,
 {
     type Output = Self;
 
