@@ -1,7 +1,7 @@
 mod matrix;
-mod metric;
+mod metrics;
 mod vector;
 
 pub use matrix::*;
-pub use metric::*;
+pub use metrics::*;
 pub use vector::*;
