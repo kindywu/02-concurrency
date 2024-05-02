@@ -18,3 +18,6 @@
 
 - git tag -a v2-thread
 - git push origin v2-thread
+
+- git tag
+- git checkout v2-3-metrics-1
