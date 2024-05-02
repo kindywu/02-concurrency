@@ -29,6 +29,13 @@ impl Metrics {
         Ok(())
     }
 
+    pub fn dec(&self, key: impl Into<String>) -> Result<()> {
+        let mut data = self.data.lock().map_err(|e| anyhow!("{:?}", e))?;
+        let counter = data.entry(key.into()).or_insert(0);
+        *counter -= 1;
+        Ok(())
+    }
+
     pub fn snapshot(&self) -> Result<HashMap<String, i64>> {
         Ok(self.data.lock().map_err(|e| anyhow!("{:?}", e))?.clone())
     }
