@@ -1,6 +1,3 @@
-// metrics data structure
-// 基本功能：inc/dec/snapshot
-
 use anyhow::{anyhow, Result};
 use std::{
     collections::HashMap,
@@ -26,17 +23,13 @@ impl Metrics {
     }
 
     pub fn inc(&self, key: impl Into<String>) -> Result<()> {
-        let mut data = self.data.lock().map_err(|e| anyhow!(e.to_string()))?;
+        let mut data = self.data.lock().map_err(|e| anyhow!("{:?}", e))?;
         let counter = data.entry(key.into()).or_insert(0);
         *counter += 1;
         Ok(())
     }
 
     pub fn snapshot(&self) -> Result<HashMap<String, i64>> {
-        Ok(self
-            .data
-            .lock()
-            .map_err(|e| anyhow!(e.to_string()))?
-            .clone())
+        Ok(self.data.lock().map_err(|e| anyhow!("{:?}", e))?.clone())
     }
 }
