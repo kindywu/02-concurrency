@@ -207,7 +207,7 @@ where
     let senders = (0..NUM_THREAD)
         .map(|i| {
             let (tx, rx) = mpsc::channel::<Msg<T>>();
-            thread::spawn(move || {
+            thread::spawn(move || -> Result<()> {
                 for msg in rx {
                     println!("thread {} working", i);
                     let value = dot_product_vec(msg.input.row, msg.input.col)?;
@@ -216,7 +216,8 @@ where
                         .map_err(|e| anyhow::anyhow!("{:?}", e))?;
                 }
                 println!("thread {} exited", i);
-                Ok::<_, anyhow::Error>(())
+                // Ok::<_, anyhow::Error>(())
+                Ok(())
             });
             tx
         })
@@ -255,7 +256,9 @@ where
             let col = b.data[j..]
                 .iter()
                 .step_by(b.col)
-                .copied()
+                // .copied()
+                // .map(|&v| v)
+                .cloned()
                 .collect::<Vec<_>>();
             let idx = i * b.col + j;
 
