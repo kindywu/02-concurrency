@@ -18,8 +18,9 @@ fn main() -> Result<()> {
 
     loop {
         thread::sleep(Duration::from_secs(5));
-        let data = metrics.snapshot();
-        println!("{:?}", data);
+        // let info = metrics.debug()?;
+        // println!("{}", info.into());
+        println!("{}", metrics);
     }
 }
 
