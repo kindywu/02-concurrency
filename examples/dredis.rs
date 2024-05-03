@@ -10,6 +10,8 @@ use tracing::{info, warn};
 const ADDR: &str = "0.0.0.0:6380";
 #[tokio::main]
 async fn main() -> Result<()> {
+    std::env::set_var("RUST_LOG", "debug");
+
     tracing_subscriber::fmt::init();
 
     let listener = TcpListener::bind(ADDR).await?;
@@ -22,7 +24,7 @@ async fn main() -> Result<()> {
             if let Err(e) = process_redis_conn(stream, client_addr).await {
                 warn!("Error processing conn with {}: {:?}", client_addr, e);
             }
-        });
+        }); //这里不用.await就是为了不阻塞
     }
 }
 const BUF_SIZE: usize = 4096;
@@ -39,6 +41,7 @@ async fn process_redis_conn(mut stream: TcpStream, client_addr: SocketAddr) -> R
                     "read {} bytes from {} content is {:?}",
                     n, client_addr, line
                 );
+                // b" => &[u8]
                 stream.write_all(b"+OK\r\n").await?;
             }
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
