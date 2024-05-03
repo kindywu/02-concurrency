@@ -1,3 +1,4 @@
+mod dredis;
 mod matrix;
 mod metrics;
 mod vector;
